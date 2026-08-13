@@ -566,7 +566,9 @@ impl Manifest {
 
         let protected_targets: Vec<_> = updated_files
             .iter()
-            .filter_map(|(old, new)| {
+            .map(|(old, new)| (Some(old), new))
+            .chain(self.files.iter().map(|new| (None, new)))
+            .filter_map(|(old_opt, new)| {
                 let clobber = new
                     .clobber
                     .unwrap_or_else(|| self.clobber_by_default.unwrap_or(false));
@@ -585,7 +587,12 @@ impl Manifest {
                     return None;
                 }
 
-                (!old.check().unwrap_or(false)).then(|| new.target.clone())
+                // If file is not new, check that the old one was not modified
+                let conflict = match old_opt {
+                    Some(old) => !old.check().unwrap_or(false),
+                    None => true,
+                };
+                conflict.then(|| new.target.clone())
             })
             .collect();
         if !protected_targets.is_empty() {
